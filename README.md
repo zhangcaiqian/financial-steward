@@ -53,6 +53,23 @@ python main.py
 
 详细使用说明请查看：[快速开始指南](backend/QUICKSTART.md)
 
+### 资产配置管理前端
+
+```bash
+cd frontend
+pnpm install
+pnpm run dev
+```
+
+默认前端代理 `http://localhost:8000` 的 API。
+
+### 资产配置管理 API
+
+```bash
+cd backend
+uvicorn src.api.main:app --reload --port 8000
+```
+
 ## 📂 项目结构
 
 ```
@@ -177,4 +194,3 @@ MIT License
 ---
 
 **开始使用：** `cd backend && ./setup.sh && python example.py`
-

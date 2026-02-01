@@ -89,3 +89,20 @@ CYCLE_THRESHOLDS = {
     'trend_months': 3,  # 趋势判断所需月数
 }
 
+# 资产配置系统数据库配置
+PORTFOLIO_DB = {
+    'url': os.getenv('PORTFOLIO_DB_URL', ''),
+    'host': os.getenv('PORTFOLIO_DB_HOST', '127.0.0.1'),
+    'port': int(os.getenv('PORTFOLIO_DB_PORT', '3306')),
+    'user': os.getenv('PORTFOLIO_DB_USER', 'root'),
+    'password': os.getenv('PORTFOLIO_DB_PASSWORD', ''),
+    'database': os.getenv('PORTFOLIO_DB_NAME', 'financial_steward'),
+}
+
+# 资产配置系统默认参数
+PORTFOLIO_DEFAULTS = {
+    'rebalance_frequency_days': 180,
+    'rebalance_threshold_ratio': 0.05,
+    'cash_target_ratio': 0.05,
+    'dca_batches': 4,
+}
