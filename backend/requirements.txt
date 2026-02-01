@@ -1,0 +1,15 @@
+# 数据采集
+akshare>=1.12.0
+
+# 数据处理
+pandas>=2.0.0
+numpy>=1.24.0
+
+# 可视化
+matplotlib>=3.7.0
+
+# 定时任务
+schedule>=1.2.0
+
+# 日志（Python内置，无需安装）
+

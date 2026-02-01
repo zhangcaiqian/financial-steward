@@ -1,0 +1,25 @@
+2026-01-08 18:50:49,319 - __main__ - INFO - [main.py:100] - 程序启动
+2026-01-08 18:50:49,319 - src.collector - INFO - [collector.py:176] - 开始采集宏观数据...
+2026-01-08 18:50:50,582 - src.collector - INFO - [collector.py:71] - ✅ M1/M2数据获取成功
+2026-01-08 18:50:51,845 - src.collector - INFO - [collector.py:93] - ✅ 社融数据获取成功
+2026-01-08 18:50:53,171 - src.collector - INFO - [collector.py:115] - ✅ PMI数据获取成功
+2026-01-08 18:51:01,742 - src.collector - INFO - [collector.py:153] - ✅ CPI/PPI数据获取成功
+2026-01-08 18:51:02,944 - src.collector - INFO - [collector.py:168] - ✅ GDP数据获取成功
+2026-01-08 18:51:02,945 - src.collector - INFO - [collector.py:188] - 数据采集完成
+2026-01-08 18:51:02,946 - src.analyzer - INFO - [analyzer.py:211] - 生成报告完成，当前周期: 弱复苏
+2026-01-08 18:51:02,947 - src.monitor - INFO - [monitor.py:71] - 报告已保存: /Users/zhangjun/repos/business-cycle-conf/backend/reports/20260108_185102_cycle_report.json
+2026-01-08 18:51:02,947 - __main__ - INFO - [main.py:109] - 分析完成
+2026-01-08 19:06:55,725 - __main__ - INFO - [main.py:100] - 程序启动
+2026-01-08 19:06:55,725 - src.collector - INFO - [collector.py:176] - 开始采集宏观数据...
+2026-01-08 19:06:56,978 - src.collector - INFO - [collector.py:71] - ✅ M1/M2数据获取成功
+2026-01-08 19:06:58,235 - src.collector - INFO - [collector.py:93] - ✅ 社融数据获取成功
+2026-01-08 19:06:59,482 - src.collector - INFO - [collector.py:115] - ✅ PMI数据获取成功
+2026-01-08 19:07:08,635 - src.collector - INFO - [collector.py:153] - ✅ CPI/PPI数据获取成功
+2026-01-08 19:07:10,089 - src.collector - INFO - [collector.py:168] - ✅ GDP数据获取成功
+2026-01-08 19:07:10,089 - src.collector - INFO - [collector.py:188] - 数据采集完成
+2026-01-08 19:07:10,090 - src.analyzer - INFO - [analyzer.py:211] - 生成报告完成，当前周期: 弱复苏
+2026-01-08 19:07:10,091 - src.monitor - INFO - [monitor.py:71] - 报告已保存: /Users/zhangjun/repos/business-cycle-conf/backend/reports/20260108_190710_cycle_report.json
+2026-01-08 19:07:10,453 - src.visualizer - INFO - [visualizer.py:63] - 图表已保存: /Users/zhangjun/repos/business-cycle-conf/backend/reports/m1_pmi_trend.png
+2026-01-08 19:07:10,577 - src.visualizer - INFO - [visualizer.py:112] - 仪表盘已保存: /Users/zhangjun/repos/business-cycle-conf/backend/reports/cycle_dashboard.png
+2026-01-08 19:07:11,085 - src.visualizer - INFO - [visualizer.py:205] - 综合图表已保存: /Users/zhangjun/repos/business-cycle-conf/backend/reports/all_indicators.png
+2026-01-08 19:07:11,085 - __main__ - INFO - [main.py:109] - 分析完成
