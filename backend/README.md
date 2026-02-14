@@ -83,6 +83,8 @@ pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --tru
 source venv/bin/activate
 # Windows:
 venv\Scripts\activate.bat
+
+uvicorn src.api.main:app --reload --port 8000
 ```
 
 ### 1. 单次分析
@@ -141,6 +143,12 @@ deactivate
 通过环境变量配置 MySQL 连接：
 
 ```
+DATABASE_URL=mysql+pymysql://user:password@host:3306/financial_steward
+```
+
+可选：不使用 `DATABASE_URL` 时，可使用拆分配置：
+
+```
 PORTFOLIO_DB_HOST=127.0.0.1
 PORTFOLIO_DB_PORT=3306
 PORTFOLIO_DB_USER=root
@@ -149,7 +157,7 @@ PORTFOLIO_DB_NAME=financial_steward
 ```
 
 系统会按 `ENVIRONMENT` 变量加载 `.env.{ENVIRONMENT}`，若不存在则加载 `.env`。
-已提供示例：`.env.development`、`.env.production`、`.env.example`（可按需复制修改）。
+已提供示例：`.env.development`、`.env.example`（可按需复制修改）。
 
 可选环境变量：
 
@@ -190,23 +198,47 @@ uvicorn src.api.main:app --reload --port 8000
 
 启动时会自动检测并创建资产配置相关表结构。
 
-### 6. 聊天录入（LLM 信息抽取）
+### 6. 智能体模型配置（LLM）
 
+默认使用 Qwen Max（OpenAI 兼容模式）。
 支持 OpenAI / DeepSeek / Kimi / MiniMax 等 OpenAI 兼容模型。
 需要配置 LLM 环境变量：
 
 ```
-LLM_PROVIDER=openai
-LLM_MODEL=gpt-4o-mini
-LLM_BASE_URL=https://api.openai.com/v1
+LLM_PROVIDER=openai_compatible
+LLM_MODEL=qwen-max
+LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 LLM_API_KEY=your_api_key
 LLM_ENABLE_RESPONSE_FORMAT=false
 ```
 
 说明：
-- `LLM_PROVIDER=openai` 使用 Responses API + JSON Schema
-- 其他 provider 使用 `POST /chat/completions`（OpenAI 兼容）
+- 目前使用 `POST /chat/completions`（OpenAI 兼容）
 - 如果你的模型支持 JSON mode，可设置 `LLM_ENABLE_RESPONSE_FORMAT=true`
+
+### 7. 资产配置管家智能体（WebSocket）
+
+WebSocket 地址：
+
+```
+ws://localhost:8000/ws/agent
+```
+
+支持能力：持仓/配置查询、调仓建议、经济周期判断、指数数据查询、联网搜索。
+
+### 8. 联网搜索（SearXNG）
+
+启动 SearXNG：
+
+```bash
+docker compose -f docker-compose.searxng.yml up -d
+```
+
+配置搜索地址：
+
+```
+SEARCH_BASE_URL=http://localhost:8080
+```
 
 示例（OpenAI 兼容）：
 

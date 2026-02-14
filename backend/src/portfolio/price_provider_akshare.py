@@ -18,7 +18,7 @@ class AksharePriceProvider(PriceProvider):
         self.request_delay = request_delay
 
     def get_latest_nav(self, fund_code: str, fund_type: str) -> Tuple[date, float]:
-        if fund_type == "etf":
+        if fund_type in ("etf", "listed"):
             return self._get_etf_nav(fund_code)
         if fund_type == "open":
             return self._get_open_fund_nav(fund_code)

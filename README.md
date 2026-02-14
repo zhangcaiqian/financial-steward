@@ -62,12 +62,27 @@ pnpm run dev
 ```
 
 默认前端代理 `http://localhost:8000` 的 API。
+可选使用 `frontend/.env.example` 设置 `VITE_API_TARGET` 与 `VITE_WS_URL`。
 
 ### 资产配置管理 API
 
 ```bash
 cd backend
 uvicorn src.api.main:app --reload --port 8000
+```
+
+### 资产配置管家（智能体）
+
+WebSocket:
+
+```
+ws://localhost:8000/ws/agent
+```
+
+可选：启动 SearXNG（用于联网搜索）
+
+```bash
+docker compose -f docker-compose.searxng.yml up -d
 ```
 
 ## 📂 项目结构

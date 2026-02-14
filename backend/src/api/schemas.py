@@ -60,14 +60,6 @@ class RebalanceRequest(BaseModel):
     recalc_each_batch: bool = True
 
 
-class ChatIngestRequest(BaseModel):
-    text: str
-
-
-class ChatConfirmRequest(BaseModel):
-    chat_id: int
-
-
 class PromptUpdate(BaseModel):
-    name: str = "chat_extraction"
+    name: str = "agent_system"
     content: str

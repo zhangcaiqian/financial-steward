@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import os
+import json
+import uuid
 from datetime import datetime
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.env import load_env
@@ -24,12 +26,8 @@ from src.portfolio.scheduler import start_batch_scheduler
 from src.portfolio.service import (
     adjust_cash,
     create_transaction,
-    get_chat_message,
     get_prompt,
-    list_funds,
-    list_chat_history,
-    mark_chat_applied,
-    save_chat_message,
+    list_funds_with_cycles,
     update_cycle_targets,
     update_fund,
     update_settings,
@@ -37,11 +35,9 @@ from src.portfolio.service import (
     upsert_holding,
     upsert_prompt,
 )
-from src.portfolio.llm_extractor import extract_chat_intent
+from src.agent.agent import AgentSession
 from src.api.schemas import (
     CashAdjustment,
-    ChatConfirmRequest,
-    ChatIngestRequest,
     CycleTargetsUpdate,
     FundCreate,
     FundUpdate,
@@ -89,8 +85,7 @@ def create_fund(payload: FundCreate) -> dict:
 
 @app.get("/funds")
 def get_funds() -> list[dict]:
-    funds = list_funds()
-    return [{"id": fund.id, "code": fund.code, "name": fund.name, "fund_type": fund.fund_type} for fund in funds]
+    return list_funds_with_cycles()
 
 
 @app.put("/funds/{fund_id}")
@@ -235,87 +230,6 @@ def sync_navs() -> dict:
     return {"updated": count}
 
 
-@app.post("/chat/ingest")
-def chat_ingest(payload: ChatIngestRequest) -> dict:
-    result = extract_chat_intent(payload.text)
-    if not result.get("ok"):
-        msg = save_chat_message(payload.text, None, "failed", None, None)
-        return {"ok": False, "error": result.get("error"), "detail": result.get("detail"), "chat_id": msg.id}
-
-    parsed = result.get("parsed", {})
-    msg = save_chat_message(payload.text, parsed, "parsed", result.get("provider"), result.get("model"))
-    return {"ok": True, "parsed": parsed, "chat_id": msg.id}
-
-
-@app.post("/chat/confirm")
-def chat_confirm(payload: ChatConfirmRequest) -> dict:
-    msg = get_chat_message(payload.chat_id)
-    if msg is None:
-        raise HTTPException(status_code=404, detail="Chat message not found")
-    if msg.status == "applied":
-        return {"ok": True, "chat_id": msg.id, "status": "applied"}
-
-    parsed = msg.parsed_json or {}
-    intent = parsed.get("intent")
-    data = parsed.get("data", {}) if isinstance(parsed.get("data"), dict) else {}
-    if intent == "cash":
-        cash = adjust_cash(float(data.get("amount", 0)))
-        mark_chat_applied(msg.id)
-        return {"ok": True, "chat_id": msg.id, "cash_balance": float(cash.balance)}
-    if intent == "holding":
-        holding = upsert_holding(data.get("fund_code", ""), data.get("shares", 0), data.get("avg_cost", 0))
-        mark_chat_applied(msg.id)
-        return {"ok": True, "chat_id": msg.id, "holding_id": holding.id}
-    if intent == "transaction":
-        trade_date = data.get("trade_date")
-        if isinstance(trade_date, str) and trade_date:
-            try:
-                trade_date = datetime.fromisoformat(trade_date)
-            except ValueError:
-                trade_date = None
-        tx = create_transaction(
-            fund_code=data.get("fund_code", ""),
-            trade_type=data.get("trade_type", ""),
-            amount=float(data.get("amount", 0.0)),
-            shares=data.get("shares"),
-            price=data.get("price"),
-            trade_date=trade_date,
-            note=data.get("note"),
-        )
-        mark_chat_applied(msg.id)
-        return {"ok": True, "chat_id": msg.id, "transaction_id": tx.id}
-    if intent == "fund":
-        fund = upsert_fund(
-            code=data.get("fund_code") or data.get("code", ""),
-            name=data.get("fund_name") or data.get("name", ""),
-            fund_type=data.get("fund_type", "open"),
-            currency=data.get("currency", "CNY"),
-            cycle_weights=data.get("cycle_weights", {}),
-        )
-        mark_chat_applied(msg.id)
-        return {"ok": True, "chat_id": msg.id, "fund_id": fund.id}
-
-    raise HTTPException(status_code=400, detail="Unsupported chat intent")
-
-
-@app.get("/chat/history")
-def chat_history(limit: int = 50) -> list[dict]:
-    rows = list_chat_history(limit)
-    return [
-        {
-            "id": row.id,
-            "text": row.text,
-            "status": row.status,
-            "parsed": row.parsed_json,
-            "provider": row.provider,
-            "model": row.model,
-            "created_at": row.created_at.isoformat(),
-            "applied_at": row.applied_at.isoformat() if row.applied_at else None,
-        }
-        for row in rows
-    ]
-
-
 @app.get("/prompts/{name}")
 def get_prompt_api(name: str) -> dict:
     prompt = get_prompt(name)
@@ -328,3 +242,74 @@ def get_prompt_api(name: str) -> dict:
 def update_prompt_api(payload: PromptUpdate) -> dict:
     prompt = upsert_prompt(payload.name, payload.content)
     return {"name": prompt.name, "updated_at": prompt.updated_at.isoformat()}
+
+
+@app.websocket("/ws/agent")
+async def agent_ws(websocket: WebSocket):
+    await websocket.accept()
+    session = AgentSession()
+
+    async def on_delta(message_id: str, chunk: str):
+        await websocket.send_json({"type": "message.delta", "message_id": message_id, "delta": {"content": chunk}})
+
+    async def on_tool_event(payload: dict):
+        await websocket.send_json(payload)
+
+    try:
+        while True:
+            data = await websocket.receive_json()
+            msg_type = data.get("type")
+            if msg_type in ("user", "user.message"):
+                content = data.get("content", "")
+                message_id = str(uuid.uuid4())
+                await websocket.send_json(
+                    {"type": "message.start", "message": {"id": message_id, "role": "assistant"}}
+                )
+                try:
+                    result = await session.handle_user_message(
+                        content,
+                        lambda chunk: on_delta(message_id, chunk),
+                        on_tool_event,
+                    )
+                    await websocket.send_json(
+                        {
+                            "type": "message.end",
+                            "message_id": message_id,
+                            "message": {
+                                "role": "assistant",
+                                "content": result.get("text", ""),
+                                "blocks": result.get("blocks", []),
+                            },
+                        }
+                    )
+                except Exception as exc:
+                    await websocket.send_json({"type": "error", "message": str(exc)})
+            elif msg_type in ("action", "action.call"):
+                action = data.get("action")
+                params = data.get("params", {})
+                from src.agent.tools import TOOLS
+
+                tool = TOOLS.get(action)
+                if not tool:
+                    await websocket.send_json({"type": "error", "message": "Unknown action"})
+                    continue
+                result = tool(params)
+                message_id = str(uuid.uuid4())
+                await websocket.send_json(
+                    {
+                        "type": "message.end",
+                        "message_id": message_id,
+                        "message": {
+                            "role": "assistant",
+                            "content": f"已执行动作：{action}",
+                            "blocks": [
+                                {"type": "text", "content": f"已执行动作：{action}"},
+                                {"type": "text", "content": json.dumps(result, ensure_ascii=False)},
+                            ],
+                        },
+                    }
+                )
+            else:
+                await websocket.send_json({"type": "error", "message": "Unsupported message type"})
+    except WebSocketDisconnect:
+        return

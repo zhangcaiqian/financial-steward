@@ -64,3 +64,5 @@ logs/*
 .DS_Store
 Thumbs.db
 
+node_modules
+backend/.env.development

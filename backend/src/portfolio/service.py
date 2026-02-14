@@ -93,6 +93,7 @@ def update_fund(fund_id: int, updates: dict) -> Fund:
 
 def _set_fund_cycle_weights(session, fund: Fund, cycle_weights: Dict[str, float]) -> None:
     cycle_lookup = {cycle.code: cycle for cycle in session.query(Cycle).all()}
+    incoming_cycle_ids = set()
     for raw_code, weight in cycle_weights.items():
         cycle_code = normalize_cycle_code(raw_code)
         cycle = cycle_lookup.get(cycle_code)
@@ -112,12 +113,58 @@ def _set_fund_cycle_weights(session, fund: Fund, cycle_weights: Dict[str, float]
             session.add(
                 FundCycleWeight(fund_id=fund.id, cycle_id=cycle.id, weight=weight)
             )
+        incoming_cycle_ids.add(cycle.id)
+
+    existing_weights = (
+        session.query(FundCycleWeight)
+        .filter(FundCycleWeight.fund_id == fund.id)
+        .all()
+    )
+    for existing in existing_weights:
+        if existing.cycle_id not in incoming_cycle_ids:
+            session.delete(existing)
 
 
 def list_funds() -> list[Fund]:
     session = get_session()
     try:
         return session.query(Fund).all()
+    finally:
+        session.close()
+
+
+def list_funds_with_cycles() -> list[dict]:
+    session = get_session()
+    try:
+        funds = session.query(Fund).all()
+        cycle_lookup = {cycle.id: cycle.code for cycle in session.query(Cycle).all()}
+        weights = session.query(FundCycleWeight).all()
+        weights_map: dict[int, list[dict]] = {}
+        for weight in weights:
+            weights_map.setdefault(weight.fund_id, []).append(
+                {
+                    "cycle": cycle_lookup.get(weight.cycle_id, str(weight.cycle_id)),
+                    "weight": float(weight.weight),
+                }
+            )
+        result = []
+        for fund in funds:
+            cycles = weights_map.get(fund.id, [])
+            primary_cycle = None
+            if cycles:
+                primary_cycle = max(cycles, key=lambda item: item.get("weight", 0)).get("cycle")
+            result.append(
+                {
+                    "id": fund.id,
+                    "code": fund.code,
+                    "name": fund.name,
+                    "fund_type": fund.fund_type,
+                    "currency": fund.currency,
+                    "cycles": cycles,
+                    "primary_cycle": primary_cycle,
+                }
+            )
+        return result
     finally:
         session.close()
 
@@ -320,6 +367,8 @@ def upsert_prompt(name: str, content: str) -> PromptTemplate:
             prompt.content = content
             prompt.updated_at = datetime.utcnow()
         session.commit()
+        session.refresh(prompt)
+        session.expunge(prompt)
         return prompt
     finally:
         session.close()

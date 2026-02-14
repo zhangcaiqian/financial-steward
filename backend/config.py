@@ -91,7 +91,7 @@ CYCLE_THRESHOLDS = {
 
 # 资产配置系统数据库配置
 PORTFOLIO_DB = {
-    'url': os.getenv('PORTFOLIO_DB_URL', ''),
+    'url': os.getenv('DATABASE_URL', os.getenv('PORTFOLIO_DB_URL', '')),
     'host': os.getenv('PORTFOLIO_DB_HOST', '127.0.0.1'),
     'port': int(os.getenv('PORTFOLIO_DB_PORT', '3306')),
     'user': os.getenv('PORTFOLIO_DB_USER', 'root'),
