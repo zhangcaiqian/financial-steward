@@ -14,6 +14,7 @@ const fundTypeLabels: Record<string, string> = {
   open: "场外基金",
   listed: "场内基金",
   etf: "场内基金",
+  advisory: "投顾基金",
 };
 
 export default function Funds() {
@@ -123,7 +124,7 @@ export default function Funds() {
         initial={{
           code: editingFund?.code ?? "",
           name: editingFund?.name ?? "",
-          fund_type: editingFund?.fund_type === "etf" ? "listed" : editingFund?.fund_type ?? "open",
+          fund_type: editingFund?.fund_type === "etf" ? "listed" : (editingFund?.fund_type ?? "open"),
           cycle: editingFund?.primary_cycle ?? "strong_recovery",
         }}
       />

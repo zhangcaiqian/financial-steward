@@ -9,7 +9,8 @@ import akshare as ak
 import httpx
 
 from src.portfolio.rebalance import generate_rebalance_plan
-from src.portfolio.service import list_funds_with_cycles, update_settings
+from src.portfolio.service import list_funds_with_cycles, record_trade, find_fund, update_settings
+from src.portfolio.price_sync import upsert_manual_nav
 from src.portfolio.db import get_session
 from src.portfolio.models import Cycle, CycleTarget
 from src.collector import MacroDataCollector
@@ -166,6 +167,52 @@ def tool_web_search(payload: Dict[str, Any]) -> Dict[str, Any]:
     return {"query": query, "results": results}
 
 
+def tool_record_trade(payload: Dict[str, Any]) -> Dict[str, Any]:
+    fund = payload.get("fund")
+    amount = payload.get("amount")
+    trade_type = payload.get("trade_type", "buy")
+    price = payload.get("price")
+
+    if not fund:
+        return {"error": "missing_fund"}
+    if not amount or amount <= 0:
+        return {"error": "invalid_amount"}
+
+    try:
+        return record_trade(fund, amount, trade_type, price=price)
+    except ValueError as exc:
+        return {"error": str(exc)}
+    except Exception as exc:
+        logger.exception("record_trade failed fund=%s amount=%s", fund, amount)
+        return {"error": "record_trade_failed", "detail": str(exc)}
+
+
+def tool_update_market_value(payload: Dict[str, Any]) -> Dict[str, Any]:
+    fund_keyword = payload.get("fund")
+    market_value = payload.get("market_value")
+
+    if not fund_keyword:
+        return {"error": "missing_fund"}
+    if market_value is None or market_value < 0:
+        return {"error": "invalid_market_value"}
+
+    try:
+        from datetime import date
+        fund = find_fund(fund_keyword)
+        nav_price = upsert_manual_nav(fund.code, market_value, date.today())
+        return {
+            "fund_code": fund.code,
+            "fund_name": fund.name,
+            "market_value": float(nav_price.nav),
+            "nav_date": str(nav_price.nav_date),
+        }
+    except ValueError as exc:
+        return {"error": str(exc)}
+    except Exception as exc:
+        logger.exception("update_market_value failed fund=%s", fund_keyword)
+        return {"error": "update_failed", "detail": str(exc)}
+
+
 TOOLS = {
     "get_portfolio_summary": tool_get_portfolio_summary,
     "get_rebalance_suggestion": tool_get_rebalance_suggestion,
@@ -175,6 +222,8 @@ TOOLS = {
     "get_economic_cycle": tool_get_economic_cycle,
     "get_index_data": tool_get_index_data,
     "web_search": tool_web_search,
+    "record_trade": tool_record_trade,
+    "update_market_value": tool_update_market_value,
 }
 
 
@@ -256,6 +305,38 @@ TOOL_SPECS = [
                     "base_url": {"type": "string"},
                 },
                 "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "record_trade",
+            "description": "记录基金买入/卖出交易。支持基金名称或代码模糊匹配，系统自动获取净值并计算份额。投顾基金自动更新总投入和市值。如果自动获取净值失败，需要用户提供price参数。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "fund": {"type": "string", "description": "基金名称或代码"},
+                    "amount": {"type": "number", "description": "交易金额（元）"},
+                    "trade_type": {"type": "string", "enum": ["buy", "sell"], "description": "买入或卖出"},
+                    "price": {"type": "number", "description": "单位净值（可选，不提供时自动获取）"},
+                },
+                "required": ["fund", "amount"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_market_value",
+            "description": "更新投顾基金的当前市值（用于定期同步投顾基金的实际市值）",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "fund": {"type": "string", "description": "基金名称或代码"},
+                    "market_value": {"type": "number", "description": "当前市值（元）"},
+                },
+                "required": ["fund", "market_value"],
             },
         },
     },

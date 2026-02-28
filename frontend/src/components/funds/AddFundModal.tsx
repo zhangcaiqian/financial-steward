@@ -103,6 +103,7 @@ export default function AddFundModal({
             >
               <option value="open">场外基金</option>
               <option value="listed">场内基金</option>
+              <option value="advisory">投顾基金</option>
             </select>
           </div>
           <div className="field">

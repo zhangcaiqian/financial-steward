@@ -1,7 +1,7 @@
 """Pydantic schemas for API."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Dict, Optional
 
 from pydantic import BaseModel, Field
@@ -58,6 +58,19 @@ class RebalanceRequest(BaseModel):
     persist: bool = True
     batch_interval_days: int = 7
     recalc_each_batch: bool = True
+
+
+class ManualNavInput(BaseModel):
+    fund_code: str
+    nav: float
+    nav_date: Optional[date] = None
+
+
+class TradeInput(BaseModel):
+    fund: str
+    amount: float
+    trade_type: str = "buy"
+    price: Optional[float] = None
 
 
 class PromptUpdate(BaseModel):

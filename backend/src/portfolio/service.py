@@ -125,6 +125,135 @@ def _set_fund_cycle_weights(session, fund: Fund, cycle_weights: Dict[str, float]
             session.delete(existing)
 
 
+def find_fund(keyword: str) -> Fund:
+    """Find an active fund by code or name (exact match first, then fuzzy)."""
+    session = get_session()
+    try:
+        fund = (
+            session.query(Fund)
+            .filter(Fund.is_active.is_(True), Fund.code == keyword)
+            .one_or_none()
+        )
+        if fund:
+            return fund
+
+        fund = (
+            session.query(Fund)
+            .filter(Fund.is_active.is_(True), Fund.name == keyword)
+            .one_or_none()
+        )
+        if fund:
+            return fund
+
+        matches = (
+            session.query(Fund)
+            .filter(Fund.is_active.is_(True), Fund.name.contains(keyword))
+            .all()
+        )
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            names = ", ".join(f"{f.name}({f.code})" for f in matches)
+            raise ValueError(f"匹配到多只基金: {names}，请提供更精确的名称或代码")
+
+        raise ValueError(f"未找到基金: {keyword}")
+    finally:
+        session.close()
+
+
+def record_trade(keyword: str, amount: float, trade_type: str = "buy", price: Optional[float] = None) -> dict:
+    """Unified trade entry: find fund by keyword, auto-fetch NAV, record transaction.
+
+    If *price* is provided, it is used directly; otherwise the latest NAV is
+    looked up from DB or fetched from AKShare.
+    """
+    from .price_sync import get_or_fetch_nav
+
+    fund = find_fund(keyword)
+    trade_type_lower = trade_type.lower()
+    is_buy = trade_type_lower in ("buy", "purchase", "申购", "买入")
+
+    if fund.fund_type in MANUAL_FUND_TYPES:
+        return _record_advisory_trade(fund, amount, is_buy)
+
+    nav_value = price
+    if nav_value is None:
+        try:
+            _, nav_value = get_or_fetch_nav(fund.code, fund.fund_type)
+        except Exception as exc:
+            raise ValueError(
+                f"无法自动获取 {fund.name}({fund.code}) 的净值: {exc}。"
+                f"请提供净值(price)后重试。"
+            )
+
+    tx = create_transaction(
+        fund_code=fund.code,
+        trade_type=trade_type_lower,
+        amount=amount,
+        shares=None,
+        price=nav_value,
+        trade_date=None,
+        note=None,
+    )
+    shares = float(tx.shares) if tx.shares else amount / nav_value
+    return {
+        "fund_code": fund.code,
+        "fund_name": fund.name,
+        "trade_type": trade_type_lower,
+        "amount": amount,
+        "price": nav_value,
+        "shares": round(shares, 4),
+    }
+
+
+def _record_advisory_trade(fund: Fund, amount: float, is_buy: bool) -> dict:
+    from .price_sync import upsert_manual_nav
+    from datetime import date as date_type
+
+    session = get_session()
+    try:
+        holding = session.query(Holding).filter(Holding.fund_id == fund.id).one_or_none()
+        if holding is None:
+            holding = Holding(fund_id=fund.id, shares=1, avg_cost=0)
+            session.add(holding)
+            session.flush()
+
+        nav_price = (
+            session.query(NavPrice)
+            .filter(NavPrice.fund_id == fund.id, NavPrice.is_latest.is_(True))
+            .one_or_none()
+        )
+        current_value = float(nav_price.nav) if nav_price else 0.0
+        current_cost = float(holding.avg_cost)
+
+        if is_buy:
+            new_cost = current_cost + amount
+            new_value = current_value + amount
+        else:
+            new_cost = max(0, current_cost - amount)
+            new_value = max(0, current_value - amount)
+
+        holding.avg_cost = new_cost
+        holding.shares = 1
+        session.commit()
+    finally:
+        session.close()
+
+    upsert_manual_nav(fund.code, new_value, date_type.today())
+
+    return {
+        "fund_code": fund.code,
+        "fund_name": fund.name,
+        "trade_type": "buy" if is_buy else "sell",
+        "amount": amount,
+        "total_cost": new_cost,
+        "market_value": new_value,
+    }
+
+
+MANUAL_FUND_TYPES = {"advisory"}
+
+
 def list_funds() -> list[Fund]:
     session = get_session()
     try:

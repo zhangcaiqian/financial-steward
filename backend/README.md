@@ -1,248 +1,212 @@
-# 经济周期自动判断系统 - 后端
+# Financial Steward 后端
 
 ## 项目简介
 
-这是一个基于Python的宏观经济周期自动判断系统，通过采集和分析多个宏观经济指标（M1、M2、PMI、CPI、PPI、社融等），自动判断当前经济周期阶段，并提供相应的资产配置建议。
+基于 Python 的宏观经济周期自动判断与资产配置管理系统。通过 FastAPI 提供 RESTful API 和 WebSocket 智能体服务，涵盖：
 
-同时提供 **资产配置管理模块（Portfolio）**，用于录入持仓、同步基金/ETF净值（T-1）、计算目标权重与再平衡建议。
-
-## 功能特性
-
-- ✅ **数据采集**：自动从AKShare获取宏观经济数据
-- ✅ **周期分析**：基于多指标综合判断经济周期（强复苏、弱复苏、弱衰退、强衰退、混沌期）
-- ✅ **自动监控**：支持定时任务，自动执行分析
-- ✅ **数据可视化**：生成各类经济指标的趋势图表
-- ✅ **报告生成**：自动生成JSON格式的分析报告
-- ✅ **错误处理**：完善的错误处理和重试机制
-- ✅ **资产配置管理**：MySQL持仓管理 + AKShare T-1净值同步 + 再平衡建议
+- **经济周期分析**：采集 AKShare 宏观经济数据（M1、M2、PMI、CPI、PPI、社融等），自动判断当前经济周期阶段
+- **资产配置管理**：持仓管理、基金/ETF T-1 净值同步、目标权重与再平衡建议
+- **智能体对话**：基于 LLM 的 WebSocket 智能体，支持持仓查询、调仓建议、周期判断、指数行情、联网搜索
 
 ## 项目结构
 
 ```
 backend/
 ├── src/
-│   ├── collector.py      # 数据采集器
-│   ├── analyzer.py       # 周期分析器
-│   ├── monitor.py        # 监控系统
-│   └── visualizer.py     # 可视化模块
-│   └── portfolio/        # 资产配置模块
-├── data/
-│   ├── raw/              # 原始数据
-│   └── processed/        # 处理后数据
-├── reports/              # 分析报告
-├── logs/                 # 日志文件
-├── config.py             # 配置文件
-├── main.py               # 主程序入口
-├── requirements.txt      # 依赖列表
-├── portfolio_cli.py      # 资产配置CLI入口
-└── README.md             # 说明文档
+│   ├── api/
+│   │   ├── main.py            # FastAPI 应用入口 & 路由定义
+│   │   └── schemas.py         # Pydantic 请求/响应模型
+│   ├── agent/
+│   │   ├── agent.py           # 智能体会话管理
+│   │   ├── llm_client.py      # LLM 客户端
+│   │   ├── strategy.py        # 智能体策略
+│   │   └── tools.py           # 智能体工具集
+│   ├── portfolio/
+│   │   ├── models.py          # SQLAlchemy 数据模型
+│   │   ├── db.py              # 数据库连接
+│   │   ├── init_db.py         # 表结构初始化 & 种子数据
+│   │   ├── service.py         # 业务逻辑层
+│   │   ├── rebalance.py       # 再平衡计算
+│   │   ├── rebalance_plan.py  # 再平衡计划管理
+│   │   ├── scheduler.py       # 后台定时任务
+│   │   ├── price_sync.py      # 净值同步
+│   │   ├── price_provider.py  # 行情数据接口
+│   │   └── price_provider_akshare.py
+│   ├── collector.py           # 宏观数据采集器
+│   ├── analyzer.py            # 经济周期分析器
+│   ├── monitor.py             # 定时监控（CLI）
+│   ├── visualizer.py          # 可视化（CLI）
+│   └── env.py                 # 环境变量加载
+├── config.py                  # 全局配置
+├── main.py                    # 经济周期分析 CLI 入口
+├── portfolio_cli.py           # 资产配置 CLI 工具
+├── requirements.txt           # Python 依赖
+├── .env.example               # 环境变量模板
+└── .env.development           # 开发环境配置
 ```
 
-## 环境搭建
+## 快速开始
 
-### 方法一：使用自动安装脚本（推荐）
+### 1. 安装依赖
 
-**macOS/Linux:**
 ```bash
 cd backend
-./setup.sh
-```
 
-**Windows:**
-```bash
-cd backend
-setup.bat
-```
-
-### 方法二：手动安装
-
-```bash
-# 1. 创建虚拟环境
 python3 -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate.bat
 
-# 2. 激活虚拟环境
-# macOS/Linux:
-source venv/bin/activate
-# Windows:
-venv\Scripts\activate.bat
-
-# 3. 升级 pip
 pip install --upgrade pip
-
-# 4. 安装依赖（推荐使用阿里云镜像加速）
 pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host=mirrors.aliyun.com
 ```
 
-## 使用方法
+### 2. 配置环境变量
 
-**⚠️ 注意：运行前请先激活虚拟环境**
-
-```bash
-# 激活虚拟环境
-# macOS/Linux:
-source venv/bin/activate
-# Windows:
-venv\Scripts\activate.bat
-
-uvicorn src.api.main:app --reload --port 8000
-```
-
-### 1. 单次分析
+复制 `.env.example` 并修改：
 
 ```bash
-# 执行单次分析
-python main.py
-
-# 执行分析并生成图表
-python main.py --charts
+cp .env.example .env.development
 ```
 
-### 2. 定时监控
-
-```bash
-# 启动定时监控（默认每7天执行一次）
-python main.py --monitor
-
-# 自定义监控间隔（每3天执行一次）
-python main.py --monitor --interval 3
-```
-
-### 3. 运行示例代码
-
-```bash
-# 运行快速开始示例
-python example.py
-```
-
-### 4. 作为模块使用
-
-```python
-from src.collector import MacroDataCollector
-from src.analyzer import EconomicCycleAnalyzer
-
-# 采集数据
-collector = MacroDataCollector()
-data = collector.collect_all()
-
-# 分析周期
-analyzer = EconomicCycleAnalyzer(data)
-report = analyzer.generate_report()
-analyzer.print_report()
-```
-
-### 5. 退出虚拟环境
-
-```bash
-deactivate
-```
-
-## 资产配置管理（Portfolio）
-
-### 1. 数据库配置
-
-通过环境变量配置 MySQL 连接：
+必填项：
 
 ```
+ENVIRONMENT=development
 DATABASE_URL=mysql+pymysql://user:password@host:3306/financial_steward
+LLM_API_KEY=your_api_key
 ```
 
-可选：不使用 `DATABASE_URL` 时，可使用拆分配置：
-
-```
-PORTFOLIO_DB_HOST=127.0.0.1
-PORTFOLIO_DB_PORT=3306
-PORTFOLIO_DB_USER=root
-PORTFOLIO_DB_PASSWORD=your_password
-PORTFOLIO_DB_NAME=financial_steward
-```
-
-系统会按 `ENVIRONMENT` 变量加载 `.env.{ENVIRONMENT}`，若不存在则加载 `.env`。
-已提供示例：`.env.development`、`.env.example`（可按需复制修改）。
-
-可选环境变量：
-
-```
-PORTFOLIO_DB_URL=mysql+pymysql://user:pass@host:3306/db?charset=utf8mb4
-PORTFOLIO_CORS_ORIGINS=http://localhost:5173
-PORTFOLIO_SCHEDULER_ENABLED=true
-PORTFOLIO_SCHEDULER_INTERVAL=60
-```
-
-### 2. 初始化表结构
+### 3. 启动服务
 
 ```bash
-python portfolio_cli.py init-db
-```
-
-### 3. 同步基金/ETF T-1 净值
-
-```bash
-python portfolio_cli.py sync-nav
-```
-
-### 4. 生成再平衡建议（含分批买入）
-
-```bash
-python portfolio_cli.py rebalance
-```
-
-说明：
-- ETF 使用 T-1 收盘价近似净值
-- 买入侧按 4 批等分执行（可配置），卖出侧一次性执行
-
-### 5. 启动 API 服务（FastAPI）
-
-```bash
+source venv/bin/activate
 uvicorn src.api.main:app --reload --port 8000
 ```
 
-启动时会自动检测并创建资产配置相关表结构。
+服务启动时会自动完成数据库表结构初始化和种子数据写入，并启动后台定时任务调度器。
 
-### 6. 智能体模型配置（LLM）
+访问 `http://localhost:8000/health` 确认服务正常运行。
 
-默认使用 Qwen Max（OpenAI 兼容模式）。
-支持 OpenAI / DeepSeek / Kimi / MiniMax 等 OpenAI 兼容模型。
-需要配置 LLM 环境变量：
+## 环境变量说明
 
-```
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `ENVIRONMENT` | 环境名称，决定加载 `.env.{ENVIRONMENT}` | `development` |
+| `DATABASE_URL` | MySQL 连接串 | — |
+| `PORTFOLIO_DB_HOST` | 数据库主机（不使用 DATABASE_URL 时） | `127.0.0.1` |
+| `PORTFOLIO_DB_PORT` | 数据库端口 | `3306` |
+| `PORTFOLIO_DB_USER` | 数据库用户 | `root` |
+| `PORTFOLIO_DB_PASSWORD` | 数据库密码 | — |
+| `PORTFOLIO_DB_NAME` | 数据库名 | `financial_steward` |
+| `PORTFOLIO_CORS_ORIGINS` | CORS 允许来源（逗号分隔） | `*` |
+| `PORTFOLIO_SCHEDULER_ENABLED` | 启用后台调度器 | `true` |
+| `PORTFOLIO_SCHEDULER_INTERVAL` | 调度器轮询间隔（秒） | `60` |
+| `LLM_PROVIDER` | LLM 提供商 | `openai_compatible` |
+| `LLM_MODEL` | 模型名称 | `qwen-max` |
+| `LLM_BASE_URL` | LLM API 地址 | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
+| `LLM_API_KEY` | LLM API 密钥 | — |
+| `LLM_ENABLE_RESPONSE_FORMAT` | 启用 JSON mode | `false` |
+| `SEARCH_BASE_URL` | SearXNG 搜索服务地址 | `http://localhost:8080` |
+
+## API 接口
+
+### 健康检查
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/health` | 服务健康检查 |
+
+### 基金管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/funds` | 创建/更新基金（含周期权重） |
+| GET | `/funds` | 获取全部基金及周期权重 |
+| PUT | `/funds/{fund_id}` | 更新基金信息 |
+
+### 持仓管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/holdings` | 创建/更新持仓（份额、成本） |
+
+### 现金管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/cash/deposit` | 存入现金 |
+| POST | `/cash/withdraw` | 取出现金 |
+
+### 交易记录
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/transactions` | 创建交易记录 |
+
+### 周期目标
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/cycles/targets` | 获取四周期目标权重 |
+| PUT | `/cycles/targets` | 更新周期目标权重 |
+
+### 组合设置
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/settings` | 获取组合参数 |
+| PUT | `/settings` | 更新组合参数（再平衡频率、阈值、现金比例、DCA 批次） |
+
+### 组合总览 & 再平衡
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/portfolio/summary` | 获取组合总览（总资产、现金、周期分布、基金偏离） |
+| POST | `/portfolio/rebalance` | 生成再平衡计划（可选持久化） |
+| GET | `/portfolio/rebalance/{plan_id}` | 查看再平衡计划详情 |
+| POST | `/portfolio/rebalance/{plan_id}/execute/{batch_no}` | 执行指定批次 |
+| POST | `/portfolio/rebalance/{plan_id}/recalculate` | 重新计算剩余批次 |
+| POST | `/portfolio/rebalance/mark-due` | 标记到期批次为就绪 |
+
+### 净值同步
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/prices/sync` | 同步全部基金/ETF 的 T-1 净值 |
+
+### Prompt 模板
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/prompts/{name}` | 获取 Prompt 模板 |
+| PUT | `/prompts` | 创建/更新 Prompt 模板 |
+
+### 智能体 WebSocket
+
+| 协议 | 路径 | 说明 |
+|------|------|------|
+| WS | `/ws/agent` | 智能体对话（流式消息 + 工具调用） |
+
+智能体内置工具：
+
+- `get_portfolio_summary` — 资产配置概览
+- `get_rebalance_suggestion` — 调仓建议
+- `get_cycle_targets` — 周期目标权重
+- `get_settings` — 组合参数
+- `get_fund_list` — 基金列表
+- `get_economic_cycle` — 经济周期判断
+- `get_index_data` — 指数行情查询（A股 / 港股 / 债券）
+- `web_search` — 联网搜索
+
+## 智能体 LLM 配置
+
+默认使用 Qwen Max（OpenAI 兼容模式），支持任何 OpenAI 兼容的模型服务：
+
+```bash
+# Qwen Max（默认）
 LLM_PROVIDER=openai_compatible
 LLM_MODEL=qwen-max
 LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-LLM_API_KEY=your_api_key
-LLM_ENABLE_RESPONSE_FORMAT=false
-```
 
-说明：
-- 目前使用 `POST /chat/completions`（OpenAI 兼容）
-- 如果你的模型支持 JSON mode，可设置 `LLM_ENABLE_RESPONSE_FORMAT=true`
-
-### 7. 资产配置管家智能体（WebSocket）
-
-WebSocket 地址：
-
-```
-ws://localhost:8000/ws/agent
-```
-
-支持能力：持仓/配置查询、调仓建议、经济周期判断、指数数据查询、联网搜索。
-
-### 8. 联网搜索（SearXNG）
-
-启动 SearXNG：
-
-```bash
-docker compose -f docker-compose.searxng.yml up -d
-```
-
-配置搜索地址：
-
-```
-SEARCH_BASE_URL=http://localhost:8080
-```
-
-示例（OpenAI 兼容）：
-
-```
 # DeepSeek
 LLM_PROVIDER=deepseek
 LLM_MODEL=deepseek-chat
@@ -257,90 +221,68 @@ LLM_BASE_URL=https://api.moonshot.ai/v1
 LLM_PROVIDER=minimax
 LLM_MODEL=MiniMax-M2.1
 LLM_BASE_URL=https://api.minimax.io/v1
+```
 
-# 自定义 OpenAI 兼容服务
-LLM_PROVIDER=openai_compatible
-LLM_MODEL=your_model_id
-LLM_BASE_URL=https://your-openai-compatible-domain/v1
+若模型支持 JSON mode，可设置 `LLM_ENABLE_RESPONSE_FORMAT=true`。
+
+## 联网搜索（SearXNG）
+
+```bash
+docker compose -f docker-compose.searxng.yml up -d
+```
+
+配置：
+
+```
+SEARCH_BASE_URL=http://localhost:8080
+```
+
+## CLI 工具
+
+除 API 服务外，项目保留了命令行工具用于快速调试和独立运行：
+
+### 经济周期分析
+
+```bash
+python main.py                         # 单次分析
+python main.py --charts                # 分析并生成图表
+python main.py --monitor               # 启动定时监控（默认每 7 天）
+python main.py --monitor --interval 3  # 自定义监控间隔
+```
+
+### 资产配置管理
+
+```bash
+python portfolio_cli.py init-db     # 初始化数据库表结构
+python portfolio_cli.py sync-nav    # 同步基金/ETF T-1 净值
+python portfolio_cli.py rebalance   # 生成再平衡建议
 ```
 
 ## 配置说明
 
-主要配置在 `config.py` 文件中：
+`config.py` 中的主要配置项：
 
-- `DATA_COLLECTION_CONFIG`: 数据采集配置（重试次数、延迟等）
-- `MONITOR_CONFIG`: 监控配置（间隔时间、执行时间等）
-- `VISUALIZATION_CONFIG`: 可视化配置（图表分辨率、字体等）
-- `CYCLE_THRESHOLDS`: 周期判断阈值配置
-
-## 输出说明
-
-### 报告文件
-
-分析报告保存在 `reports/` 目录下，文件名格式：`YYYYMMDD_HHMMSS_cycle_report.json`
-
-报告内容示例：
-```json
-{
-  "判断时间": "2024-01-15 10:30:00",
-  "经济周期": "弱复苏",
-  "配置建议": {
-    "股票配置": "中证500(12%) + 中证1000(12%) + 科创50(8%)",
-    "债券配置": "维持30%",
-    "说明": "产业周期爆发，中小盘科技成长股表现优异"
-  }
-}
-```
-
-### 图表文件
-
-如果使用 `--charts` 参数，会生成以下图表：
-- `m1_pmi_trend.png`: M1和PMI趋势图
-- `cycle_dashboard.png`: 经济周期仪表盘
-- `all_indicators.png`: 所有指标综合图表
-
-## 日志说明
-
-日志文件保存在 `logs/` 目录下：
-- `app.log`: 应用主日志
-- `monitor.log`: 监控系统日志（如果使用监控功能）
+| 配置组 | 说明 |
+|--------|------|
+| `DATA_COLLECTION_CONFIG` | 数据采集配置（重试次数、延迟） |
+| `MONITOR_CONFIG` | 定时监控配置（间隔、执行时间） |
+| `VISUALIZATION_CONFIG` | 可视化配置（分辨率、字体） |
+| `CYCLE_THRESHOLDS` | 经济周期判断阈值 |
+| `PORTFOLIO_DB` | 数据库连接配置 |
+| `PORTFOLIO_DEFAULTS` | 资产配置默认参数（再平衡频率 180 天、阈值 5%、现金比例 5%、DCA 4 批） |
 
 ## 注意事项
 
-1. **网络连接**：需要稳定的网络连接访问AKShare数据源
-2. **数据更新频率**：宏观经济数据通常按月更新，建议监控间隔设置为7天或更长
-3. **字体问题**：如果图表中文显示异常，请安装中文字体或修改 `config.py` 中的字体配置
-4. **API限制**：AKShare可能有频率限制，系统已内置重试和延迟机制
-5. **API版本**：本项目已适配 AKShare 1.18.8+，如遇到API错误，请查看 [API_UPDATE.md](API_UPDATE.md)
-
-## 常见问题
-
-### Q1: 数据获取失败怎么办？
-
-A: 系统已内置重试机制，如果仍然失败，请检查：
-- 网络连接是否正常
-- AKShare服务是否可用
-- 是否需要更新AKShare版本
-
-### Q2: 如何修改判断逻辑？
-
-A: 修改 `src/analyzer.py` 中的 `judge_cycle()` 方法，调整各指标的判断条件。
-
-### Q3: 如何添加新的数据源？
-
-A: 在 `src/collector.py` 中添加新的数据获取方法，然后在 `collect_all()` 中调用。
+1. **数据库**：需要 MySQL 实例，服务启动时自动建表和初始化种子数据
+2. **网络连接**：需要访问 AKShare 数据源获取宏观数据和基金净值
+3. **数据更新频率**：宏观经济数据按月更新，基金净值为 T-1
+4. **API 限制**：AKShare 可能有频率限制，系统已内置重试和延迟机制
+5. **API 版本**：已适配 AKShare 1.18.8+，如遇 API 错误请查看 [API_UPDATE.md](API_UPDATE.md)
+6. **字体问题**：CLI 图表中文显示异常时，请安装中文字体或修改 `config.py` 中的字体配置
 
 ## 理论基础
 
-想了解为什么这个方法能判断经济周期？请阅读：
-- 📚 [经济周期判断理论](../docs/cycle-theory.md) - 详细解释核心原理和理论依据
-
-## 后续扩展
-
-- [ ] Web API接口（Flask/FastAPI）
-- [ ] 机器学习预测模型
-- [ ] 微信/邮件通知功能
-- [ ] 历史回测功能
+- [经济周期判断理论](../docs/cycle-theory.md) — 核心原理和理论依据
 
 ## 许可证
 

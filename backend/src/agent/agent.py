@@ -23,16 +23,6 @@ class AgentSession:
         strategy = load_strategy_context()
         if strategy:
             system_prompt = f"{system_prompt}\n\n【配置策略】\n{strategy}\n"
-        system_prompt += (
-            "\n【输出格式（用于流式展示，必须严格遵守）】\n"
-            f"{TEXT_DELIM}\n"
-            "这里输出给用户阅读的 Markdown 正文（用于流式显示）。\n"
-            f"{BLOCKS_DELIM}\n"
-            "这里输出 JSON：{\"blocks\": [...]}。\n"
-            "blocks 类型支持: text, table, chart, buttons, form。\n"
-            "chart 需要包含 chartType 与 data。\n"
-            "如需写入数据库，只能通过 buttons/form 请求用户确认。\n"
-        )
         return {"role": "system", "content": system_prompt}
 
     async def handle_user_message(
@@ -61,7 +51,11 @@ class AgentSession:
                 event_id = str(uuid.uuid4())
                 if on_tool_event:
                     await on_tool_event({"type": "tool.start", "event_id": event_id, "tool": {"name": name}})
-                logger.info("Tool call start name=%s args=%s", name, args)
+                logger.info(
+                    "Tool call start name=%s args=%s",
+                    name,
+                    json.dumps(args, ensure_ascii=False),
+                )
                 try:
                     result = tool(args) if tool else {"error": "unknown_tool"}
                     if not tool and on_tool_event:
@@ -74,7 +68,11 @@ class AgentSession:
                         )
                     elif on_tool_event:
                         await on_tool_event({"type": "tool.end", "event_id": event_id, "tool": {"name": name}})
-                    logger.info("Tool call end name=%s status=success", name)
+                    logger.info(
+                        "Tool call end name=%s result=%s",
+                        name,
+                        json.dumps(result, ensure_ascii=False, default=str),
+                    )
                 except Exception as exc:
                     result = {"error": "tool_failed", "detail": str(exc)}
                     if on_tool_event:
@@ -100,6 +98,11 @@ class AgentSession:
                 await on_delta(text_chunk)
 
         full_text = await chat_stream(self.messages, on_delta=on_raw_delta)
+
+        if not stream_state["has_text"] and full_text.strip():
+            logger.warning("LLM response missing <<<TEXT>>> delimiter, sending full text as fallback")
+            await on_delta(full_text)
+
         self.messages.append({"role": "assistant", "content": full_text})
         parsed = _parse_blocks(full_text)
         text = parsed.get("text") or _extract_text_from_blocks(parsed.get("blocks", [])) or ""

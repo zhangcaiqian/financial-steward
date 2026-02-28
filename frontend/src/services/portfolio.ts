@@ -63,6 +63,17 @@ export function syncNavs() {
   return apiFetch("/prices/sync", { method: "POST" });
 }
 
+export function manualNav(payload: {
+  fund_code: string;
+  nav: number;
+  nav_date?: string;
+}) {
+  return apiFetch("/prices/manual", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function createRebalancePlan(payload: {
   batch_interval_days: number;
   recalc_each_batch: boolean;

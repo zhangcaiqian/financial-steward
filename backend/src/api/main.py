@@ -1,10 +1,11 @@
 """FastAPI application for portfolio management."""
 from __future__ import annotations
 
+import logging
 import os
 import json
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -12,8 +13,13 @@ from src.env import load_env
 
 load_env()
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+
 from src.portfolio.init_db import init_db
-from src.portfolio.price_sync import sync_latest_navs
+from src.portfolio.price_sync import sync_latest_navs, upsert_manual_nav
 from src.portfolio.rebalance import generate_rebalance_plan
 from src.portfolio.rebalance_plan import (
     create_rebalance_plan,
@@ -28,6 +34,7 @@ from src.portfolio.service import (
     create_transaction,
     get_prompt,
     list_funds_with_cycles,
+    record_trade,
     update_cycle_targets,
     update_fund,
     update_settings,
@@ -42,9 +49,11 @@ from src.api.schemas import (
     FundCreate,
     FundUpdate,
     HoldingUpsert,
+    ManualNavInput,
     PortfolioSettingsUpdate,
     PromptUpdate,
     RebalanceRequest,
+    TradeInput,
     TransactionCreate,
 )
 
@@ -228,6 +237,28 @@ def mark_due() -> dict:
 def sync_navs() -> dict:
     count = sync_latest_navs()
     return {"updated": count}
+
+
+@app.post("/prices/manual")
+def manual_nav(payload: ManualNavInput) -> dict:
+    nav_date = payload.nav_date or date.today()
+    try:
+        nav_price = upsert_manual_nav(payload.fund_code, payload.nav, nav_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return {
+        "fund_code": payload.fund_code,
+        "nav": float(nav_price.nav),
+        "nav_date": str(nav_price.nav_date),
+    }
+
+
+@app.post("/portfolio/trade")
+def trade_api(payload: TradeInput) -> dict:
+    try:
+        return record_trade(payload.fund, payload.amount, payload.trade_type, price=payload.price)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @app.get("/prompts/{name}")
